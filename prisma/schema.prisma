@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  owner
+  secretary
+  teacher
+  student
+}
+
+enum PaymentStatus {
+  paid
+  unpaid
+}
+
+enum FinanceType {
+  income
+  expense
+}
+
+enum BillingKind {
+  invoice
+  bill
+}
+
+enum BillingStatus {
+  draft
+  sent
+  paid
+  overdue
+}
+
+enum AudienceScope {
+  all
+  selected
+}
+
+model User {
+  id           String   @id
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  title        String
+  hostEmail    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions     Session[]
+  payments     Payment?
+  teacherOf    CampusClass[]     @relation("TeacherClasses")
+  enrollments  Enrollment[]
+  recordings   Recording[]       @relation("UploadedByRecordings")
+  assignments  Assignment[]      @relation("UploadedByAssignments")
+  notes        ClassNote[]       @relation("CreatedByNotes")
+  files        ClassFile[]       @relation("UploadedByFiles")
+  financeItems FinanceItem[]
+  billingDocs  BillingDocument[] @relation("IssuedByBillingDocuments")
+}
+
+model Session {
+  id        String   @id
+  token     String   @unique
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  studentId       String        @id
+  plan            String
+  status          PaymentStatus
+  balanceDue      Int
+  nextInvoiceDate DateTime
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model CampusClass {
+  id                   String  @id
+  name                 String
+  program              String
+  schedule             String
+  room                 String
+  teacherId            String?
+  liveForDays          Int
+  recordingLiveForDays Int
+  meetingId            String?
+  joinUrl              String?
+  hostUrl              String?
+
+  teacher     User?        @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: SetNull)
+  enrollments Enrollment[]
+  recordings  Recording[]
+  assignments Assignment[]
+  notes       ClassNote[]
+  files       ClassFile[]
+  attendance  Attendance[]
+}
+
+model Enrollment {
+  id        String @id
+  classId   String
+  studentId String
+
+  class   CampusClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+}
+
+model Attendance {
+  id                String   @id
+  classId           String
+  sessionLabel      String
+  date              DateTime
+  present           Int
+  absent            Int
+  participationRate Int
+
+  class CampusClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+}
+
+model Recording {
+  id             String   @id
+  classId        String
+  title          String
+  url            String
+  uploadedAt     DateTime
+  availableUntil DateTime
+  uploadedById   String
+
+  class      CampusClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation("UploadedByRecordings", fields: [uploadedById], references: [id], onDelete: Cascade)
+}
+
+model Assignment {
+  id           String   @id
+  classId      String
+  title        String
+  dueDate      DateTime
+  summary      String
+  uploadedById String
+
+  class      CampusClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation("UploadedByAssignments", fields: [uploadedById], references: [id], onDelete: Cascade)
+}
+
+model ClassNote {
+  id                 String        @id
+  classId            String
+  title              String
+  body               String
+  createdAt          DateTime
+  createdById        String
+  audience           AudienceScope
+  audienceStudentIds String
+
+  class     CampusClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdBy User        @relation("CreatedByNotes", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model ClassFile {
+  id                 String        @id
+  classId            String
+  label              String
+  fileName           String
+  mimeType           String
+  size               Int
+  dataUrl            String
+  uploadedAt         DateTime
+  uploadedById       String
+  audience           AudienceScope
+  audienceStudentIds String
+
+  class      CampusClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation("UploadedByFiles", fields: [uploadedById], references: [id], onDelete: Cascade)
+}
+
+model FinanceItem {
+  id       String      @id
+  label    String
+  amount   Int
+  date     DateTime
+  type     FinanceType
+  owner    String
+  category String
+  userId   String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model BillingDocument {
+  id            String        @id
+  kind          BillingKind
+  recipientName String
+  recipientId   String?
+  amount        Int
+  status        BillingStatus
+  issueDate     DateTime
+  dueDate       DateTime
+  description   String
+  issuedById    String
+
+  issuedBy User @relation("IssuedByBillingDocuments", fields: [issuedById], references: [id], onDelete: Cascade)
+}
+
+model OwnerSetting {
+  id                          String @id
+  defaultClassLiveForDays     Int
+  defaultRecordingLiveForDays Int
+}
+
+model QuickBooksConnection {
+  id                    String   @id
+  realmId               String   @unique
+  environment           String
+  companyName           String?
+  accessToken           String
+  refreshToken          String
+  accessTokenExpiresAt  DateTime
+  refreshTokenExpiresAt DateTime
+  connectedAt           DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  lastSyncedAt          DateTime?
+}
+
+model AppState {
+  id        String   @id
+  data      String
+  updatedAt DateTime @updatedAt
+}
